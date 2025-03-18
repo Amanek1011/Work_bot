@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 load_dotenv()
 
 WEATHER_API_KEY=os.getenv('WEATHER_API_KEY')
-FX_KG_API_KEY = os.getenv("FX_KG_API_KEY")
+
 OPEN_AI_CHAT_KEY = os.getenv('OPEN_AI_CHAT_KEY')
 
 
@@ -45,8 +45,8 @@ async def get_currency_rates():
                 rates = {}
 
                 for currency in root.findall('Currency'):
-                    iso_code = currency.get('ISOCode')  # Получаем атрибут ISOCode
-                    value_element = currency.find('Value')  # Находим элемент Value
+                    iso_code = currency.get('ISOCode')
+                    value_element = currency.find('Value')
 
 
                     if iso_code and value_element is not None:
