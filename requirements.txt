@@ -3,3 +3,4 @@ python-dotenv==1.0.1
 asyncpg==0.30.0
 BeautifulSoup4==4.13.3
 deep-translator==1.11.4
+openai==1.66.3

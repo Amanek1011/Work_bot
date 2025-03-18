@@ -15,6 +15,9 @@ reply_menu = types.ReplyKeyboardMarkup(
                 types.KeyboardButton(text='💡 Шутка'),
                 types.KeyboardButton(text='🏞 Пройти опрос'),
             ],
+            [
+                types.KeyboardButton(text='💡 Чат с ИИ')
+            ]
         ],
         resize_keyboard=True,
 )
@@ -26,5 +29,11 @@ inline_image = types.InlineKeyboardMarkup(
         [InlineKeyboardButton(text='Футбол⚽', callback_data='football')],
         [InlineKeyboardButton(text='Баскетболл🏀', callback_data='basketball')]
 
+    ]
+)
+
+inline_AI = types.InlineKeyboardMarkup(
+    inline_keyboard=[
+        [InlineKeyboardButton(text='Старт', callback_data='start_Ai')]
     ]
 )

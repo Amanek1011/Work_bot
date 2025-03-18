@@ -1,16 +1,18 @@
 import os
 
 from aiogram.client.session import aiohttp
-
+from aiogram.types import Message
 from dotenv import load_dotenv
 from deep_translator import GoogleTranslator
-from States import Questions
+from openai import OpenAI
+
 import aiohttp
 import xml.etree.ElementTree as ET
 load_dotenv()
 
 WEATHER_API_KEY=os.getenv('WEATHER_API_KEY')
 FX_KG_API_KEY = os.getenv("FX_KG_API_KEY")
+OPEN_AI_CHAT_KEY = os.getenv('OPEN_AI_CHAT_KEY')
 
 
 #🏞 Погода
@@ -127,7 +129,25 @@ async def get_joke():
             else:
                 return "Ошибка при получении шутки 😢"
 
-#🏞 Опросник
-async def start_survey(message, state):
-    await message.answer("Как вас зовут?")
-    await state.set_state(Questions.name)
+#OpenAi
+async def chat_with_ai(message: Message):
+    try:
+        print("Старт")
+        client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=f"{OPEN_AI_CHAT_KEY}",
+        )
+
+        completion = client.chat.completions.create(
+        model="open-r1/olympiccoder-32b:free",
+        messages=[
+            {
+            "role": "user",
+            "content": message.text
+            }
+        ]
+        )
+        r = completion.choices[0].message.content
+        await message.answer(r)
+    except Exception as e:
+        print(e)

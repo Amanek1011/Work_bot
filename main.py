@@ -1,17 +1,14 @@
 import asyncio
-
-
 import os
-
+import asyncpg
 from aiogram.types import Message
-from aiogram.fsm.context import FSMContext
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from dotenv import load_dotenv
 from aiogram import Router
-from service import (get_weather, get_joke,get_currency_rates, movies, start_survey)
+
+from service import (get_weather, get_joke, get_currency_rates, movies, chat_with_ai)
 import keyboards as kb
-from States import Questions
 
 load_dotenv()
 
@@ -21,12 +18,45 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 router = Router()
 
+user_surveys = {}
+
+questions = [
+    "Как вас зовут?",
+    "Сколько вам лет?",
+    "Какой ваш любимый школьный предмет?",
+    "Какой ваш любимый цвет?",
+    "Какой ваш любимый фильм?",
+    "Какое ваше хобби?",
+    "Какое ваше любимое животное?",
+    "Какое ваше любимое время года?"
+]
+
+
+async def create_pool():
+    return await asyncpg.create_pool(
+        user=os.getenv('DB_USER'),
+        password=os.getenv('DB_PASSWORD'),
+        database=os.getenv('DB_NAME'),
+        host=os.getenv('DB_HOST')
+    )
+
+
 @dp.message(CommandStart())
 async def start(message: types.Message):
     await message.answer(f"Привет {message.from_user.first_name or message.from_user.username}, выберите из меню",
-                         reply_markup= kb.reply_menu)
+                         reply_markup=kb.reply_menu)
+
+
 @dp.message()
-async def text_handler(message: Message, state: FSMContext):
+async def text_handler(message: Message):
+    chat_id = message.chat.id
+
+
+    if chat_id in user_surveys:
+        await survey_handler(message)
+        return
+
+
     if message.text == "💡 Картинка":
         await message.answer('Какую картинку вы хотите?', reply_markup=kb.inline_image)
     elif message.text == "🏞 Погода":
@@ -41,67 +71,38 @@ async def text_handler(message: Message, state: FSMContext):
         joke = await get_joke()
         await message.answer(joke)
     elif message.text == '🏞 Пройти опрос':
-        await start_survey(message, state)
+        await start_survey(message)
+    elif message.text == '💡 Чат с ИИ':
+        await message.answer('Задавайте любой вопрос, на который вам ответит ИИ.')
+    else:
+        await chat_with_ai(message)
 
 
-@dp.message(Questions.name)
-async def process_name(message: Message, state: FSMContext):
-    await state.update_data(name=message.text)
-    await message.answer("Сколько вам лет?")
-    await state.set_state(Questions.age)
+async def start_survey(message: types.Message):
+    chat_id = message.chat.id
+    user_surveys[chat_id] = {'answers': []}
+    await message.answer(questions[0])
 
-@dp.message(Questions.age)
-async def process_age(message: Message, state: FSMContext):
-    await state.update_data(age=message.text)
-    await message.answer("Какой ваш любимый школьный предмет?")
-    await state.set_state(Questions.favorite_subject)
 
-@dp.message(Questions.favorite_subject)
-async def process_favorite_subject(message: Message, state: FSMContext):
-    await state.update_data(favorite_subject=message.text)
-    await message.answer("Какой ваш любимый цвет?")
-    await state.set_state(Questions.favorite_color)
+async def survey_handler(message: types.Message):
+    chat_id = message.chat.id
 
-@dp.message(Questions.favorite_color)
-async def process_favorite_color(message: Message, state: FSMContext):
-    await state.update_data(favorite_color=message.text)
-    await message.answer("Какой ваш любимый фильм?")
-    await state.set_state(Questions.favorite_movie)
+    if chat_id in user_surveys:
+        user_surveys[chat_id]['answers'].append(message.text)
+        q_index = len(user_surveys[chat_id]['answers'])
 
-@dp.message(Questions.favorite_movie)
-async def process_favorite_movie(message: Message, state: FSMContext):
-    await state.update_data(favorite_movie=message.text)
-    await message.answer("Какое ваше хобби?")
-    await state.set_state(Questions.hobby)
-
-@dp.message(Questions.hobby)
-async def process_hobby(message: Message, state: FSMContext):
-    await state.update_data(hobby=message.text)
-    await message.answer("Какое ваше любимое животное?")
-    await state.set_state(Questions.favorite_animal)
-
-@dp.message(Questions.favorite_animal)
-async def process_favorite_animal(message: Message, state: FSMContext):
-    await state.update_data(favorite_animal=message.text)
-    await message.answer("Ваше любимое время года?")
-    await state.set_state(Questions.favorite_season)
-
-@dp.message(Questions.favorite_season)
-async def process_favorite_season(message: Message, state: FSMContext):
-    data = await state.get_data()
-    summary = (f"Спасибо за участие в опросе!\n"
-               f"Имя: {data['name']}\n"
-               f"Возраст: {data['age']}\n"
-               f"Любимый предмет: {data['favorite_subject']}\n"
-               f"Любимый цвет: {data['favorite_color']}\n"
-               f"Любимый фильм: {data['favorite_movie']}\n"
-               f"Хобби: {data['hobby']}\n"
-               f"Любимое животное: {data['favorite_animal']}\n"
-               f"Любимое время года: {data['favorite_season']}")
-
-    await message.answer(summary)
-    await state.clear()
-
+        if q_index < len(questions):
+            await message.answer(questions[q_index])
+        else:
+            pool = dp['db']
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    'INSERT INTO surveys (user_id, answers) VALUES ($1, $2)',
+                    message.from_user.id,
+                    user_surveys[chat_id]['answers']
+                )
+            await message.answer("Спасибо за участие в опросе!")
+            del user_surveys[chat_id]
 
 @dp.callback_query()
 async def callback_query_handler(call: types.CallbackQuery):
@@ -112,11 +113,15 @@ async def callback_query_handler(call: types.CallbackQuery):
     elif call.data == 'basketball':
         await call.message.answer_photo('https://avatars.mds.yandex.net/i?id=35c3668628f22806c28c3d7785ebaa14_l-8770658-images-thumbs&n=13')
 
-
 async def main():
-    print("Bot started...")
-    await dp.start_polling(bot)
-
+    pool = await create_pool()
+    dp['db'] = pool
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
+        await pool.close()
 
 if __name__ == '__main__':
+    print("Starting bot...")
     asyncio.run(main())
