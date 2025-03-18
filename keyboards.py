@@ -31,9 +31,3 @@ inline_image = types.InlineKeyboardMarkup(
 
     ]
 )
-
-inline_AI = types.InlineKeyboardMarkup(
-    inline_keyboard=[
-        [InlineKeyboardButton(text='Старт', callback_data='start_Ai')]
-    ]
-)
